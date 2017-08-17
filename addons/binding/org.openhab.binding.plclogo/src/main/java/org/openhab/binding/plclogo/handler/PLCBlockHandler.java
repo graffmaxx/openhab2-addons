@@ -14,7 +14,6 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
 
-import org.eclipse.smarthome.config.core.Configuration;
 import org.eclipse.smarthome.core.thing.Bridge;
 import org.eclipse.smarthome.core.thing.ChannelUID;
 import org.eclipse.smarthome.core.thing.Thing;
@@ -46,9 +45,6 @@ public abstract class PLCBlockHandler extends BaseThingHandler {
     private PLCLogoClient client;
     private String family;
 
-    private int address = INVALID;
-    private int bit = INVALID;
-
     /**
      * Constructor.
      */
@@ -75,10 +71,10 @@ public abstract class PLCBlockHandler extends BaseThingHandler {
 
         if (command instanceof RefreshType) {
             final String name = getBlockName();
-            final int offset = getBlockDataType().getByteCount();
+            final int offset = getBlockDataType(name).getByteCount();
             if ((offset > 0) && (name != null)) {
                 final byte[] buffer = new byte[offset];
-                int result = client.readDBArea(1, getAddress(), buffer.length, S7Client.S7WLByte, buffer);
+                int result = client.readDBArea(1, getAddress(name), buffer.length, S7Client.S7WLByte, buffer);
                 if (result == 0) {
                     setData(Arrays.copyOfRange(buffer, 0, offset));
                 } else {
@@ -99,33 +95,15 @@ public abstract class PLCBlockHandler extends BaseThingHandler {
 
         client = null;
         family = null;
-        address = INVALID;
-        bit = INVALID;
     }
 
     /**
-     * Calculate memory address for configured block.
+     * Calculate address for the block with given name.
      *
+     * @param name Name of the LOGO! block
      * @return Calculated address
      */
-    public int getAddress() {
-        if (address == INVALID) {
-            address = getAddress(getBlockName());
-        }
-        return address;
-    }
-
-    /**
-     * Calculate bit within memory address for configured block.
-     *
-     * @return Calculated bit
-     */
-    public int getBit() {
-        if (bit == INVALID) {
-            bit = getBit(getBlockName());
-        }
-        return bit;
-    }
+    public abstract int getAddress(final String name);
 
     /**
      * Returns configured block name.
@@ -145,23 +123,17 @@ public abstract class PLCBlockHandler extends BaseThingHandler {
      * Returns data type accepted by LOGO! block.
      * Can be BIT for digital blocks and WORD/DWORD for analog
      *
+     * @param name Name of the LOGO! block
      * @return Data type accepted by configured block
      */
-    public abstract PLCLogoDataType getBlockDataType();
-
-    @Override
-    protected void updateConfiguration(Configuration configuration) {
-        super.updateConfiguration(configuration);
-        address = INVALID;
-        bit = INVALID;
-    }
+    public abstract PLCLogoDataType getBlockDataType(final String name);
 
     /**
      * Returns configured LOGO! communication client.
      *
      * @return Configured LOGO! client
      */
-    protected PLCLogoClient getClient() {
+    protected PLCLogoClient getLogoClient() {
         return client;
     }
 
@@ -191,10 +163,11 @@ public abstract class PLCBlockHandler extends BaseThingHandler {
 
         String message = "";
         boolean success = false;
-        if (getBlockName() != null) {
+        final String name = getBlockName();
+        if (name != null) {
             family = handler.getLogoFamily();
             final Map<?, Integer> block = LOGO_MEMORY_BLOCK.get(family);
-            if ((0 <= getAddress()) && (getAddress() <= block.get("SIZE"))) {
+            if ((0 <= getAddress(name)) && (getAddress(name) <= block.get("SIZE"))) {
                 success = true;
                 client = handler.getLogoClient();
                 updateStatus(ThingStatus.ONLINE);
@@ -209,21 +182,5 @@ public abstract class PLCBlockHandler extends BaseThingHandler {
             updateStatus(ThingStatus.OFFLINE, ThingStatusDetail.CONFIGURATION_ERROR, message);
         }
     }
-
-    /**
-     * Calculate address for the block with given name.
-     *
-     * @param name Name of the LOGO! block
-     * @return Calculated address offset
-     */
-    protected abstract int getAddress(final String name);
-
-    /**
-     * Calculate bit within address for block with given name.
-     *
-     * @param name Name of the LOGO! block
-     * @return Calculated bit
-     */
-    protected abstract int getBit(final String name);
 
 }

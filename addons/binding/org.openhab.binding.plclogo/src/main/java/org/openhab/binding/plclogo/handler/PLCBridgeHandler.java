@@ -62,6 +62,7 @@ public class PLCBridgeHandler extends BaseBridgeHandler {
     private final Runnable rtcReader = new Runnable() {
         // Buffer for diagnostic data
         private final byte[] data = { 0, 0, 0, 0, 0, 0, 0 };
+        private final Channel channel = getThing().getChannel(RTC_CHANNEL_ID);
 
         @Override
         public void run() {
@@ -74,7 +75,6 @@ public class PLCBridgeHandler extends BaseBridgeHandler {
                             rtc.setTimeZone(calendar.getTimeZone());
                             rtc.setTimeInMillis(calendar.getTimeInMillis());
                         }
-                        final Channel channel = thing.getChannel(RTC_CHANNEL_ID);
                         updateState(channel.getUID(), new DateTimeType(rtc));
 
                         if (logger.isTraceEnabled()) {
@@ -117,8 +117,9 @@ public class PLCBridgeHandler extends BaseBridgeHandler {
                                     continue;
                                 }
 
-                                final int address = handler.getAddress();
-                                final int offset = handler.getBlockDataType().getByteCount();
+                                final String name = handler.getBlockName();
+                                final int address = handler.getAddress(name);
+                                final int offset = handler.getBlockDataType(name).getByteCount();
                                 if ((offset > 0) && (address != PLCBlockHandler.INVALID)) {
                                     handler.setData(Arrays.copyOfRange(buffer, address, address + offset));
                                 } else {

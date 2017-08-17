@@ -47,12 +47,12 @@ import Moka7.S7Client;
  */
 public class PLCDigitalBlockHandler extends PLCBlockHandler {
 
-    private final Logger logger = LoggerFactory.getLogger(PLCDigitalBlockHandler.class);
-
     public static final Set<ThingTypeUID> SUPPORTED_THING_TYPES = Collections.singleton(THING_TYPE_DIGITAL);
 
+    private final Logger logger = LoggerFactory.getLogger(PLCDigitalBlockHandler.class);
+
     private PLCLogoDigitalConfiguration config = getConfigAs(PLCLogoDigitalConfiguration.class);
-    private int oldValue = INVALID;
+    private Integer oldValue = Integer.MAX_VALUE;
 
     /**
      * Constructor.
@@ -74,8 +74,8 @@ public class PLCDigitalBlockHandler extends PLCBlockHandler {
             return;
         }
 
-        final PLCLogoClient client = getClient();
         final String channelId = channelUID.getId();
+        final PLCLogoClient client = getLogoClient();
         if (!DIGITAL_CHANNEL_ID.equals(channelId) || (client == null)) {
             logger.warn("Can not update channel {}: {}.", channelUID, client);
             return;
@@ -85,7 +85,7 @@ public class PLCDigitalBlockHandler extends PLCBlockHandler {
             super.handleCommand(channelUID, command);
         } else if ((command instanceof OpenClosedType) || (command instanceof OnOffType)) {
             final String name = getBlockName();
-            final int offset = getBlockDataType().getByteCount();
+            final int offset = getBlockDataType(name).getByteCount();
             if ((offset > 0) && (name != null)) {
                 final byte[] buffer = new byte[offset];
                 if (command instanceof OpenClosedType) {
@@ -96,7 +96,7 @@ public class PLCDigitalBlockHandler extends PLCBlockHandler {
                     S7.SetBitAt(buffer, 0, 0, state == OnOffType.ON);
                 }
 
-                final int address = 8 * getAddress() + getBit();
+                final int address = 8 * getAddress(name) + getBit(name);
                 int result = client.writeDBArea(1, address, buffer.length, S7Client.S7WLBit, buffer);
                 if (result != 0) {
                     logger.warn("Can not write data to LOGO!: {}.", S7Client.ErrorText(result));
@@ -128,7 +128,9 @@ public class PLCDigitalBlockHandler extends PLCBlockHandler {
         logger.debug("Dispose LOGO! {} digital handler.", getBlockName());
         super.dispose();
 
-        oldValue = INVALID;
+        synchronized (oldValue) {
+            oldValue = Integer.MAX_VALUE;
+        }
     }
 
     @Override
@@ -139,9 +141,10 @@ public class PLCDigitalBlockHandler extends PLCBlockHandler {
             return;
         }
 
-        if (data.length == 1) {
+        final String name = getBlockName();
+        if ((data.length == 1) && (name != null)) {
             final Channel channel = thing.getChannel(DIGITAL_CHANNEL_ID);
-            final boolean value = S7.GetBitAt(data, 0, getBit());
+            final boolean value = S7.GetBitAt(data, 0, getBit(name));
 
             final String type = channel.getAcceptedItemType();
             if (logger.isTraceEnabled()) {
@@ -159,11 +162,67 @@ public class PLCDigitalBlockHandler extends PLCBlockHandler {
                 }
                 logger.debug("Channel {} accepting {} was set to {}.", channel.getUID(), type, value);
 
-                oldValue = value ? 1 : 0;
+                synchronized (oldValue) {
+                    oldValue = value ? 1 : 0;
+                }
             }
         } else {
-            logger.warn("Block {} received wrong data {}.", getBlockName(), data);
+            logger.warn("Block {} received wrong data {}.", name, data);
         }
+    }
+
+    @Override
+    public int getAddress(final String name) {
+        int address = INVALID;
+
+        logger.debug("Get address of {} LOGO! for block {} .", getLogoFamily(), name);
+
+        if (config.isBlockValid(name)) {
+            final String block = name.trim().split("\\.")[0];
+            if (Character.isDigit(block.charAt(1))) {
+                address = Integer.parseInt(block.substring(1));
+            } else if (Character.isDigit(block.charAt(2))) {
+                address = Integer.parseInt(block.substring(2));
+            }
+
+            final int base = getBase(name);
+            if (base != 0) { // Only VB/VD/VW memory ranges are 0 based
+                address = base + (address - 1) / 8;
+            }
+        } else {
+            logger.warn("Wrong configurated LOGO! block {} found.", name);
+        }
+        return address;
+    }
+
+    /**
+     * Calculate bit within address for block with given name.
+     *
+     * @param name Name of the LOGO! block
+     * @return Calculated bit
+     */
+    public int getBit(final String name) {
+        int bit = INVALID;
+
+        logger.debug("Get bit of {} LOGO! for block {} .", getLogoFamily(), name);
+
+        if (config.isBlockValid(name)) {
+            final String[] parts = name.trim().split("\\.");
+            if (Character.isDigit(parts[0].charAt(1))) {
+                bit = Integer.parseInt(parts[0].substring(1));
+            } else if (Character.isDigit(parts[0].charAt(2))) {
+                bit = Integer.parseInt(parts[0].substring(2));
+            }
+
+            if (getBase(name) != 0) { // Only VB/VD/VW memory ranges are 0 based
+                bit = (bit - 1) % 8;
+            } else {
+                bit = Integer.parseInt(parts[1]);
+            }
+        } else {
+            logger.warn("Wrong configurated LOGO! block {} found.", name);
+        }
+        return bit;
     }
 
     @Override
@@ -172,8 +231,7 @@ public class PLCDigitalBlockHandler extends PLCBlockHandler {
     }
 
     @Override
-    public PLCLogoDataType getBlockDataType() {
-        final String name = getBlockName();
+    public PLCLogoDataType getBlockDataType(final String name) {
         final String kind = config.getBlockKind(name);
         if ((kind != null) && config.isBlockValid(name)) {
             return PLCLogoDataType.BIT;
@@ -220,7 +278,9 @@ public class PLCDigitalBlockHandler extends PLCBlockHandler {
             cBuilder.withDescription("Digital " + text);
             tBuilder.withChannel(cBuilder.build());
 
-            oldValue = INVALID;
+            synchronized (oldValue) {
+                oldValue = Integer.MAX_VALUE;
+            }
             updateThing(tBuilder.build());
             super.doInitialization();
         } else {
@@ -228,55 +288,6 @@ public class PLCDigitalBlockHandler extends PLCBlockHandler {
             updateStatus(ThingStatus.OFFLINE, ThingStatusDetail.CONFIGURATION_ERROR, message);
             logger.error("Can not initialize thing {} for LOGO! block {}.", thing.getUID(), name);
         }
-    }
-
-    @Override
-    protected int getAddress(final String name) {
-        int address = INVALID;
-
-        logger.debug("Get address of {} LOGO! for block {} .", getLogoFamily(), name);
-
-        if (config.isBlockValid(name)) {
-            final String block = name.trim().split("\\.")[0];
-            if (Character.isDigit(block.charAt(1))) {
-                address = Integer.parseInt(block.substring(1));
-            } else if (Character.isDigit(block.charAt(2))) {
-                address = Integer.parseInt(block.substring(2));
-            }
-
-            final int base = getBase(name);
-            if (base != 0) { // Only VB/VD/VW memory ranges are 0 based
-                address = base + (address - 1) / 8;
-            }
-        } else {
-            logger.warn("Wrong configurated LOGO! block {} found.", name);
-        }
-        return address;
-    }
-
-    @Override
-    protected int getBit(final String name) {
-        int bit = INVALID;
-
-        logger.debug("Get bit of {} LOGO! for block {} .", getLogoFamily(), name);
-
-        if (config.isBlockValid(name)) {
-            final String[] parts = name.trim().split("\\.");
-            if (Character.isDigit(parts[0].charAt(1))) {
-                bit = Integer.parseInt(parts[0].substring(1));
-            } else if (Character.isDigit(parts[0].charAt(2))) {
-                bit = Integer.parseInt(parts[0].substring(2));
-            }
-
-            if (getBase(name) != 0) { // Only VB/VD/VW memory ranges are 0 based
-                bit = (bit - 1) % 8;
-            } else {
-                bit = Integer.parseInt(parts[1]);
-            }
-        } else {
-            logger.warn("Wrong configurated LOGO! block {} found.", name);
-        }
-        return bit;
     }
 
     /**

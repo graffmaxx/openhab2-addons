@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+import org.eclipse.jdt.annotation.NonNull;
 import org.eclipse.smarthome.config.core.Configuration;
 import org.eclipse.smarthome.core.library.types.DateTimeType;
 import org.eclipse.smarthome.core.library.types.DecimalType;
@@ -59,12 +60,12 @@ public class PLCAnalogBlockHandler extends PLCBlockHandler {
     /**
      * Constructor.
      */
-    public PLCAnalogBlockHandler(Thing thing) {
+    public PLCAnalogBlockHandler(@NonNull Thing thing) {
         super(thing);
     }
 
     @Override
-    public void handleCommand(ChannelUID channelUID, Command command) {
+    public void handleCommand(@NonNull ChannelUID channelUID, @NonNull Command command) {
         logger.debug("Handle command {} on channel {}", command, channelUID);
 
         final Bridge bridge = getBridge();
@@ -89,7 +90,7 @@ public class PLCAnalogBlockHandler extends PLCBlockHandler {
             super.handleCommand(channelUID, command);
         } else if (command instanceof DecimalType) {
             final int offset = type.getByteCount();
-            if (((offset == 2) || (offset == 4)) && (name != null)) {
+            if ((offset == 2) || (offset == 4)) {
                 final byte[] buffer = new byte[offset];
                 final DecimalType state = (DecimalType) command;
                 if (offset == 2) {
@@ -106,7 +107,7 @@ public class PLCAnalogBlockHandler extends PLCBlockHandler {
             }
         } else if (command instanceof DateTimeType) {
             final int offset = type.getByteCount();
-            if ((offset == 2) && (name != null)) {
+            if (offset == 2) {
                 final byte[] buffer = new byte[offset];
                 final DateTimeType state = (DateTimeType) command;
                 if (ANALOG_TIME_CHANNEL.equalsIgnoreCase(config.getType())) {
@@ -163,8 +164,8 @@ public class PLCAnalogBlockHandler extends PLCBlockHandler {
             return;
         }
 
-        if ((data.length == 2) || (data.length == 4)) {
-            final Channel channel = thing.getChannel(ANALOG_CHANNEL_ID);
+        final Channel channel = thing.getChannel(ANALOG_CHANNEL_ID);
+        if (((data.length == 2) || (data.length == 4)) && (channel != null)) {
             final long value = data.length == 2 ? S7.GetShortAt(data, 0) : S7.GetDWordAt(data, 0);
 
             final String type = channel.getAcceptedItemType();
@@ -211,7 +212,7 @@ public class PLCAnalogBlockHandler extends PLCBlockHandler {
     }
 
     @Override
-    public int getAddress(final String name) {
+    public int getAddress(final @NonNull String name) {
         int address = INVALID;
 
         logger.debug("Get address of {} LOGO! for block {} .", getLogoFamily(), name);
@@ -235,12 +236,12 @@ public class PLCAnalogBlockHandler extends PLCBlockHandler {
     }
 
     @Override
-    public String getBlockName() {
+    public @NonNull String getBlockName() {
         return config.getBlockName();
     }
 
     @Override
-    public PLCLogoDataType getBlockDataType(final String name) {
+    public @NonNull PLCLogoDataType getBlockDataType(final @NonNull String name) {
         final String kind = config.getBlockKind(name);
         if ((kind != null) && config.isBlockValid(name)) {
             return kind.equalsIgnoreCase("VD") ? PLCLogoDataType.DWORD : PLCLogoDataType.WORD;
@@ -305,7 +306,7 @@ public class PLCAnalogBlockHandler extends PLCBlockHandler {
      * @param name Name of the data block
      * @return Calculated address offset
      */
-    private int getBase(final String name) {
+    private int getBase(final @NonNull String name) {
         int base = 0;
 
         logger.debug("Get base address of {} LOGO! for block {} .", getLogoFamily(), name);

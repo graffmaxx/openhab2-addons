@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+import org.eclipse.jdt.annotation.NonNull;
 import org.eclipse.smarthome.config.core.Configuration;
 import org.eclipse.smarthome.core.library.types.OnOffType;
 import org.eclipse.smarthome.core.library.types.OpenClosedType;
@@ -57,12 +58,12 @@ public class PLCDigitalBlockHandler extends PLCBlockHandler {
     /**
      * Constructor.
      */
-    public PLCDigitalBlockHandler(Thing thing) {
+    public PLCDigitalBlockHandler(@NonNull Thing thing) {
         super(thing);
     }
 
     @Override
-    public void handleCommand(ChannelUID channelUID, Command command) {
+    public void handleCommand(@NonNull ChannelUID channelUID, @NonNull Command command) {
         logger.debug("Handle command {} on channel {}", command, channelUID);
 
         final Bridge bridge = getBridge();
@@ -86,7 +87,7 @@ public class PLCDigitalBlockHandler extends PLCBlockHandler {
         } else if ((command instanceof OpenClosedType) || (command instanceof OnOffType)) {
             final String name = getBlockName();
             final int offset = getBlockDataType(name).getByteCount();
-            if ((offset > 0) && (name != null)) {
+            if (offset > 0) {
                 final byte[] buffer = new byte[offset];
                 if (command instanceof OpenClosedType) {
                     final OpenClosedType state = (OpenClosedType) command;
@@ -142,8 +143,8 @@ public class PLCDigitalBlockHandler extends PLCBlockHandler {
         }
 
         final String name = getBlockName();
-        if ((data.length == 1) && (name != null)) {
-            final Channel channel = thing.getChannel(DIGITAL_CHANNEL_ID);
+        final Channel channel = thing.getChannel(DIGITAL_CHANNEL_ID);
+        if ((data.length == 1) && (channel != null)) {
             final boolean value = S7.GetBitAt(data, 0, getBit(name));
 
             final String type = channel.getAcceptedItemType();
@@ -172,7 +173,7 @@ public class PLCDigitalBlockHandler extends PLCBlockHandler {
     }
 
     @Override
-    public int getAddress(final String name) {
+    public int getAddress(final @NonNull String name) {
         int address = INVALID;
 
         logger.debug("Get address of {} LOGO! for block {} .", getLogoFamily(), name);
@@ -201,7 +202,7 @@ public class PLCDigitalBlockHandler extends PLCBlockHandler {
      * @param name Name of the LOGO! block
      * @return Calculated bit
      */
-    public int getBit(final String name) {
+    public int getBit(final @NonNull String name) {
         int bit = INVALID;
 
         logger.debug("Get bit of {} LOGO! for block {} .", getLogoFamily(), name);
@@ -226,12 +227,12 @@ public class PLCDigitalBlockHandler extends PLCBlockHandler {
     }
 
     @Override
-    public String getBlockName() {
+    public @NonNull String getBlockName() {
         return config.getBlockName();
     }
 
     @Override
-    public PLCLogoDataType getBlockDataType(final String name) {
+    public @NonNull PLCLogoDataType getBlockDataType(final @NonNull String name) {
         final String kind = config.getBlockKind(name);
         if ((kind != null) && config.isBlockValid(name)) {
             return PLCLogoDataType.BIT;
@@ -296,7 +297,7 @@ public class PLCDigitalBlockHandler extends PLCBlockHandler {
      * @param name Name of the data block
      * @return Calculated address offset
      */
-    private int getBase(final String name) {
+    private int getBase(final @NonNull String name) {
         int base = 0;
 
         logger.debug("Get base address of {} LOGO! for block {} .", getLogoFamily(), name);

@@ -14,6 +14,7 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
 
+import org.eclipse.jdt.annotation.NonNull;
 import org.eclipse.smarthome.core.thing.Bridge;
 import org.eclipse.smarthome.core.thing.ChannelUID;
 import org.eclipse.smarthome.core.thing.Thing;
@@ -48,12 +49,12 @@ public abstract class PLCBlockHandler extends BaseThingHandler {
     /**
      * Constructor.
      */
-    public PLCBlockHandler(Thing thing) {
+    public PLCBlockHandler(@NonNull Thing thing) {
         super(thing);
     }
 
     @Override
-    public void handleCommand(ChannelUID channelUID, Command command) {
+    public void handleCommand(@NonNull ChannelUID channelUID, @NonNull Command command) {
         final Bridge bridge = getBridge();
         Objects.requireNonNull(bridge, "PLCBlockHandler: Bridge may not be null.");
 
@@ -72,7 +73,7 @@ public abstract class PLCBlockHandler extends BaseThingHandler {
         if (command instanceof RefreshType) {
             final String name = getBlockName();
             final int offset = getBlockDataType(name).getByteCount();
-            if ((offset > 0) && (name != null)) {
+            if (offset > 0) {
                 final byte[] buffer = new byte[offset];
                 int result = client.readDBArea(1, getAddress(name), buffer.length, S7Client.S7WLByte, buffer);
                 if (result == 0) {
@@ -103,14 +104,14 @@ public abstract class PLCBlockHandler extends BaseThingHandler {
      * @param name Name of the LOGO! block
      * @return Calculated address
      */
-    public abstract int getAddress(final String name);
+    public abstract int getAddress(final @NonNull String name);
 
     /**
      * Returns configured block name.
      *
      * @return Name of configured LOGO! block
      */
-    public abstract String getBlockName();
+    public abstract @NonNull String getBlockName();
 
     /**
      * Update value channel of current thing with new data.
@@ -126,7 +127,7 @@ public abstract class PLCBlockHandler extends BaseThingHandler {
      * @param name Name of the LOGO! block
      * @return Data type accepted by configured block
      */
-    public abstract PLCLogoDataType getBlockDataType(final String name);
+    public abstract @NonNull PLCLogoDataType getBlockDataType(final @NonNull String name);
 
     /**
      * Returns configured LOGO! communication client.
@@ -163,19 +164,16 @@ public abstract class PLCBlockHandler extends BaseThingHandler {
 
         String message = "";
         boolean success = false;
+        family = handler.getLogoFamily();
+
         final String name = getBlockName();
-        if (name != null) {
-            family = handler.getLogoFamily();
-            final Map<?, Integer> block = LOGO_MEMORY_BLOCK.get(family);
-            if ((0 <= getAddress(name)) && (getAddress(name) <= block.get("SIZE"))) {
-                success = true;
-                client = handler.getLogoClient();
-                updateStatus(ThingStatus.ONLINE);
-            } else {
-                message = "Can not initialize LOGO! block " + getBlockName() + ".";
-            }
+        final Map<?, Integer> block = LOGO_MEMORY_BLOCK.get(family);
+        if ((0 <= getAddress(name)) && (getAddress(name) <= block.get("SIZE"))) {
+            success = true;
+            client = handler.getLogoClient();
+            updateStatus(ThingStatus.ONLINE);
         } else {
-            message = "Can not initialize LOGO! block. Please check block name.";
+            message = "Can not initialize LOGO! block " + getBlockName() + ".";
         }
 
         if (!success) {
